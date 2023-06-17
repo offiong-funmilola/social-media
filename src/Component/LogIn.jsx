@@ -1,13 +1,17 @@
 import React from 'react'
 import { useContext } from 'react'
-import {Link} from 'react-router-dom'
+import {Link, useNavigate} from 'react-router-dom'
 import FormContext from '../Context/FormContext'
 import {FaRegEye, FaRegEyeSlash} from 'react-icons/fa'
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
+import {signInWithEmailAndPassword, sendEmailVerification} from 'firebase/auth'
+import {auth} from './Config/firebase'
+import { toast } from 'react-toastify';
 
 function LogIn() {
-    const {passwordhandler, confirmHandler, type, REGEX_PASSWORD} = useContext(FormContext)
+    const navigate = useNavigate()
+    const {passwordhandler, confirmHandler, type, REGEX_PASSWORD, setTimeActive} = useContext(FormContext)
     
     const formik = useFormik({
         initialValues: {
@@ -22,7 +26,27 @@ function LogIn() {
         }),
         onSubmit: (values) => { 
             console.log(values)
-        }
+            signInWithEmailAndPassword(auth, values.email, values.password)
+            .then(()=> {
+                if(!auth.currentUser.emailVerified){
+                    sendEmailVerification(auth.currentUser)
+                    .then(()=> {
+                        setTimeActive(true)
+                        navigate('/verify')
+                    })
+                    .catch((err)=>{
+                        toast.error('Oops! something went wrong')
+                    })
+                }
+                else{
+                    navigate('/dashboard')
+                }
+            })
+            .catch((err) => {
+                toast.error('Invalid login details')
+            })
+        } 
+        
     })
   return (
     <div className='w-full h-screen flex flex-col justify-center items-center bg-white'>

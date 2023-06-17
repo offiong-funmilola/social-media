@@ -1,13 +1,18 @@
 import React from 'react'
-import {useContext} from 'react'
+import {useContext } from 'react'
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import {FaFacebookF, FaTwitter, FaGoogle, FaRegEye, FaRegEyeSlash} from 'react-icons/fa'
-import {Link} from 'react-router-dom'
+import {Link, useNavigate} from 'react-router-dom'
 import FormContext from '../Context/FormContext'
+import { createUserWithEmailAndPassword, sendEmailVerification, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import {auth, db} from './Config/firebase'
+import {collection, query, doc, setDoc, getDocs, where} from 'firebase/firestore'
 
 function SignUp() {
-    const {passwordhandler, confirmHandler, type, REGEX_PASSWORD} = useContext(FormContext)
+    const navigate = useNavigate()
+    const provider = new GoogleAuthProvider()
+    const {passwordhandler, confirmHandler, type, REGEX_PASSWORD, setTimeActive} = useContext(FormContext)
     const formik = useFormik({
         initialValues: {
             name: '',
@@ -28,9 +33,52 @@ function SignUp() {
                         .required('This field is required')   
         }),
         onSubmit: (values) => { 
-            console.log(values)
+            let {confirmPassword, ...data} = values
+            if(formik.isValid){
+                createUserWithEmailAndPassword(auth, data.email, data.password)
+                .then(() => {
+                    sendEmailVerification(auth.currentUser)
+                }).then(()=> {
+                    setTimeActive(true);
+                     navigate('/verify')
+                    const userRef = doc(db, 'users', auth.currentUser.uid);
+                    setDoc(userRef, data, { merge: true })
+                    // setCurrentUser(auth.currentUser)
+                })
+                .catch(err => console.log(err))
+            }
         }
-    })
+    });
+
+    const signInWithGoogle = () => {
+            signInWithPopup(auth, provider)
+            .then(result => {
+                console.log(result)
+                const email = result.user.email
+                const values = {
+                    name: result.user.displayName,
+                    email: result.user.email,
+                    password: null
+                }
+                const usersQuery = query(collection(db, 'users'), where('email', '==', email));
+                getDocs(usersQuery).then((item) => {
+                    const user = item.docs.length > 0 ? item.docs[0] : null
+                    // console.log(item.docs[0])
+                    // console.log(`user retrieved is ${user} with is ${user?.uid}`)
+                    if (user) {
+                        // setCurrentUser(user.id)
+                        navigate('/dashboard')
+                    }
+                    else{
+                        const userRef = doc(db, 'users', auth.currentUser.uid)
+                        setDoc(userRef, values, { merge: true }) 
+                        // setCurrentUser(auth.currentUser)
+                    }
+                });
+            }).catch(err => console.log(err))
+        
+    }
+   
 
     return (
         <div className='w-full h-screen flex justify-between'>
@@ -49,7 +97,7 @@ function SignUp() {
                             <FaTwitter className='text-xl'/> 
                             <p className='text-base font-sans'>Twitter</p>
                         </div>
-                        <div className='w-44 p-2 bg-orange-600 text-white flex items-center justify-center gap-2 rounded-full'>
+                        <div className='w-44 p-2 bg-orange-600 text-white flex items-center justify-center gap-2 rounded-full' onClick={signInWithGoogle}>
                             <FaGoogle className='text-xl'/> 
                             <p className='text-base font-sans'>Google</p>
                         </div>
